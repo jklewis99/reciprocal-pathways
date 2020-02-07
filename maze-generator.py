@@ -1,11 +1,15 @@
 import random
 from collections import deque
+import heapq
+from union_find import union_find
+random.seed(5)
 
 class CreateMaze:
 
     maze = []
     visited = []
     position_searched = []
+    random_edge_weights = dict()
     rows = 0
     columns = 0
     still_searching = True
@@ -14,6 +18,52 @@ class CreateMaze:
 
         self.rows = rows
         self.columns = columns
+        self.randomly_generate_weights(self.random_edge_weights)
+
+    def build_walls(self):
+        # begin by initializing a 2D array with its borders
+        # initialized to 1 and its interior initialized to 0
+
+        temp = ['-' for l in range(self.columns * 2 + 1)]
+        falseRow = [False for j in range(self.columns * 2 + 1)]
+
+        self.maze.append(temp)
+        self.visited.append(falseRow)
+        self.position_searched.append(falseRow)
+        for i in range(1, self.rows + 1):
+            temp = ['-' for l in range(self.columns * 2 + 1)]
+            self.maze.append([])
+            self.position_searched.append([])
+            self.maze[2 * i - 1].append("|")
+            self.maze[2 * i - 1].append(" ")
+            self.maze[2 * i - 1].append("|")
+
+            for j in range(1, self.columns - 1):
+                if i == 1 or i == self.rows:
+                    self.maze[2 * i - 1].append(" ")
+
+                else:
+                    self.maze[2 * i - 1].append(" ")
+
+                self.maze[2 * i - 1].append('|')
+
+            self.maze[2 * i - 1].append(" ")
+            self.maze[2 * i - 1].append("|")
+            self.visited.append(falseRow)
+            self.position_searched.append(falseRow)
+            self.maze.append(temp)
+
+        # allow for entrance and exit into the self.maze by changing
+        # 2 locations on the border to 0
+        # NOTE:
+        #   it cannot be the corners because our self.maze has only
+        #   valid paths of right, left, up, or down, not
+        #   diagonal
+        self.maze[1][0] = " "
+        self.maze[1][1] = " "
+        self.maze[2 * self.rows - 1][2 * self.columns - 1] = " "
+        self.maze[2 * self.rows - 1][2 * self.columns] = " "
+        
 
     def creation(self):
         # begin by initializing a 2D array with its borders
@@ -97,7 +147,6 @@ class CreateMaze:
         # this will dictate the random path
         directions = ["right", "left", "down", "up"]
         opposite_position = {"right": "left", "down": "up", "up": "down", "left": "right"}
-        lastMovementMap = {"right": " ", "left": " ", "down": " ", "up": " "}
         randomDirection = random.choice([0, 2])
         lastMovement = directions[randomDirection]
 
@@ -199,12 +248,12 @@ class CreateMaze:
                     self.visited[temp_position[0]][temp_position[1]] = False
                     self.maze[temp_position[0]][temp_position[1]] = '*'
 
-                    # self.maze_with_lines()
+                    # self.print_maze()
                     # print()
                 stack_positions_visited.pop()[2]
 
             # print("BEFORE UPDATE")
-            # self.maze_with_lines()
+            # self.print_maze()
             if not cycled:
                 self.update_path(lastMovement, position)
             lastMovement = directions[randomDirection]
@@ -213,9 +262,222 @@ class CreateMaze:
 
             self.maze[position[0]][position[1]] = ' '
             self.visited[position[0]][position[1]] = True
-            
-        self.maze_with_lines()
+            # print("AFTER UPDATE")
+            # self.print_maze()
+            # print()
+            # for i in range(len(self.visited[0])):
+            #     print(self.visited[i])
+            # print(stack_positions_visited)
+            # print()
+        self.print_maze()
         self.fill_remaining_maze(stack_positions_visited)
+
+    def randomly_generate_weights(self, random_edge_weights):
+        '''
+        I want to randomly generate the weights between each vertex so I can make a minimum spanning tree
+        connecting all vertices
+
+        First I need to randomly assign the weights between the tangent vertices
+        I will use a 2D list for this
+        '''
+
+
+        for row in range(1, self.rows*2, 2):
+            for col in range(1, self.columns * 2, 2):
+                random_edge_weights.update({(row, col): dict()})
+
+        ''' 
+        random_edge_weights would look like this
+        {
+        
+            (A, B) : {
+                        (A+1, B) : weight1, 
+                        (A-1, B) : weight2,
+                        ...
+                     },
+            (A+1, B) : {
+                           (A, B) : weight1, 
+                        ...
+                       },
+            ...
+             
+        }
+        '''
+        # for all in random_edge_weights:
+        #     print(all)
+        for key in random_edge_weights:
+            list_connections = []
+            if key[0] == 1:
+
+                if key[1] == 1:
+                    # we are at top left
+                    list_connections.append((key[0] + 2, key[1]))
+                    list_connections.append((key[0], key[1] + 2))
+
+                elif key[1] == 2*self.columns - 1:
+                    # we are at top right
+                    list_connections.append((key[0] + 2, key[1]))
+                    list_connections.append((key[0], key[1] - 2))
+
+                else: # position(0] == 1:
+                    # we are at the top level but not on corners
+                    list_connections.append((key[0] + 2, key[1]))
+                    list_connections.append((key[0], key[1] + 2))
+                    list_connections.append((key[0], key[1] - 2))
+
+
+
+            elif key[0] == 2*self.rows-1:
+                if key[1] == 1:
+                    # we are at bottom left
+                    list_connections.append((key[0] - 2, key[1]))
+                    list_connections.append((key[0], key[1] + 2))
+
+
+                elif key[1] == 2*self.columns - 1:
+                    # we are at bottom right,
+                    list_connections.append((key[0] - 2, key[1]))
+                    list_connections.append((key[0], key[1] - 2))
+
+                else:
+                    # we are at the bottom level, so we can't go down
+                    list_connections.append((key[0] - 2, key[1]))
+                    list_connections.append((key[0], key[1] + 2))
+                    list_connections.append((key[0], key[1] - 2))
+
+
+            elif key[1] == 1:
+                # we are on the far left column, so we can't go left
+                list_connections.append((key[0] - 2, key[1]))
+                list_connections.append((key[0], key[1] + 2))
+                list_connections.append((key[0] + 2, key[1]))
+
+
+            elif key[1] == 2*self.columns-1:
+                # we are on the far right column, so we can't go right
+                list_connections.append((key[0] - 2, key[1]))
+                list_connections.append((key[0], key[1] - 2))
+                list_connections.append((key[0] + 2, key[1]))
+
+
+            else:
+                # we can go up, down, left, and right
+                list_connections.append((key[0] - 2, key[1]))
+                list_connections.append((key[0], key[1] - 2))
+                list_connections.append((key[0] + 2, key[1]))
+                list_connections.append((key[0], key[1] + 2))
+
+            # now we want to append these connections to our current vertex and assign random weights
+            # to each connection
+            if random_edge_weights.get((key[0], key[1])) is None:
+                random_edge_weights.update({(key[0], key[1]): dict()})
+            # print(list_connections)
+            for vertex in list_connections:
+
+                if random_edge_weights.get((key[0], key[1])).get(vertex) is None:
+                    random_weight = random.random()
+                    random_edge_weights.get((key[0], key[1])).update({vertex: random_weight})
+                    random_edge_weights.get(vertex).update({(key[0], key[1]): random_weight})
+
+    def update_path(self, lastMovement, position):
+
+        if lastMovement == 'up':
+            self.maze[position[0] + 1][position[1]] = ' '
+        elif lastMovement == 'down':
+            self.maze[position[0] - 1][position[1]] = ' '
+        elif lastMovement == 'right':
+            self.maze[position[0]][position[1] - 1] = ' '
+        else: # lastMovement == 'left':
+            self.maze[position[0]][position[1] + 1] = ' '
+
+    def prims_maze(self):
+
+        '''
+        prim's algorithm will pick a vertex with which the connections will begin
+        from that point, it will add the vertex with the smallest weight between the two vertices
+
+        because we want to reduce the random biases, we will randomly generate the starting vertex
+        '''
+
+        # each of our valid vertices has odd x and y values, so we will add one after the position is
+        # randomly generated
+        min_heap = []
+
+        starting_point = (random.randint(0, self.rows-1) * 2 + 1, random.randint(0, self.columns-1) * 2 + 1)
+        visited = set([starting_point])
+        # we need a min heap to keep track of which vertices will be added
+        # the objects in the min heap will be in the order of weight, from_vertex, to_vertex
+        for connection in self.random_edge_weights.get(starting_point):
+            heapq.heappush(min_heap, (self.random_edge_weights.get(starting_point)[connection], starting_point,
+                                      connection))
+        
+
+        while len(visited) < self.rows*self.columns:
+            next_connection = heapq.heappop(min_heap)
+            if next_connection[2] not in visited:
+                visited.add(next_connection[2])
+                # need to remove the bar that is between the connections
+                self.remove_wall(next_connection[1], next_connection[2])
+                for connection in self.random_edge_weights.get(next_connection[2]):
+                    if connection not in visited:
+                        heapq.heappush(min_heap, (self.random_edge_weights.get(next_connection[2])[connection],
+                                                   next_connection[2], connection))
+
+
+    def kruskalls_maze(self):
+        min_heap = []
+
+        pair_added_to_heap = set([])
+        # we need a min heap to keep track of which vertices will be added
+        # the objects in the min heap will be in the order of weight, from_vertex, to_vertex
+        for point in self.random_edge_weights:
+            for connection in self.random_edge_weights.get(point):
+                if (point, connection) not in pair_added_to_heap and (connection, point) not in pair_added_to_heap:
+                    heapq.heappush(min_heap, (self.random_edge_weights.get(point)[connection], point, connection))
+                    pair_added_to_heap.add((point, connection))
+        
+
+        uf = union_find(self.rows * self.columns)
+        # added_to_tree = set([])
+        
+        while (uf.get_num_components() > 1):
+            next_connection = heapq.heappop(min_heap)
+            #since we kept a 1D array for the parents of our union_find object, we have to send
+            # over the calculated index, which is just 
+            # (the number of columns) * (the vertex's row // 2) + (the vertex's column // 2)
+
+            if not uf.are_in_same_component(self.columns * (next_connection[1][0] // 2) + (next_connection[1][1] // 2), 
+                                            self.columns * (next_connection[2][0] // 2) + (next_connection[2][1] // 2)):
+                
+                self.remove_wall(next_connection[1], next_connection[2])
+                uf.union(self.columns * (next_connection[1][0] // 2) + next_connection[1][1] // 2, 
+                         self.columns * (next_connection[2][0] // 2) + next_connection[2][1] // 2)
+        
+
+    def remove_wall(self, from_vertex, to_vertex):
+        '''
+        this method will simply remove the "wall" between the two points
+        if the x of the to_vertex is greater than the x value of from_vertex
+            then we will move the "wall" below the from_vertex
+        if the x of the to_vertex is less than the x value of from_vertex
+            then we will move the "wall" above the from_vertex
+        if the y of the to_vertex is greater than the y value of from_vertex
+            then we will move the "wall" to the right of the from_vertex
+        if the y of the to_vertex is less than the y value of from_vertex
+            then we will move the "wall" to the left of the from_vertex
+
+        :param from_vertex: one vertex ono the connection
+        :param to_vertex: the other vertex on the connection
+        '''
+
+        if to_vertex[0] > from_vertex[0]:
+            self.maze[from_vertex[0] + 1][from_vertex[1]] = ' '
+        elif to_vertex[0] < from_vertex[0]:
+            self.maze[from_vertex[0] - 1][from_vertex[1]] = ' '
+        elif to_vertex[1] > from_vertex[1]:
+            self.maze[from_vertex[0]][from_vertex[1] + 1] = ' '
+        else:
+            self.maze[from_vertex[0]][from_vertex[1] - 1] = ' '
 
     def fill_remaining_maze(self, path_backward):
         # path_backward will be a stack of the valid path
@@ -406,18 +668,7 @@ class CreateMaze:
                 position[2] = directions[randomDirection]
                 false_paths.append(position)
 
-    def update_path(self, lastMovement, position):
-
-        if lastMovement == 'up':
-            self.maze[position[0] + 1][position[1]] = ' '
-        elif lastMovement == 'down':
-            self.maze[position[0] - 1][position[1]] = ' '
-        elif lastMovement == 'right':
-            self.maze[position[0]][position[1] - 1] = ' '
-        else: # lastMovement == 'left':
-            self.maze[position[0]][position[1] + 1] = ' '
-            
-    def maze_with_lines(self):
+    def print_maze(self):
         for i in range(len(self.maze)):
             for j in range(len(self.maze[0])):
                 print(f'{str(self.maze[i][j]):2s}', end='')
@@ -428,7 +679,7 @@ class CreateMaze:
         # or we reach a dead end
         self.position_searched[position[0]][position[1]] = True
         if position[0] == len(self.maze)-2 and position[1] == len(self.maze[0])-2:
-            self.maze[position[0]][position[1]] = 'V'
+            self.maze[position[0]][position[1]] = 'D'
             self.still_searching = False
             return True
 
@@ -458,27 +709,32 @@ class CreateMaze:
 
         return valid
 
+    def solve_dfs1(self):
+        self.position_searched = self.visited_init()
+        start = (1, 1)
+        self.solve_dfs(start)
+
     def solve_bfs(self):
 
         queue = deque()
-        visited = []
+        visited = self.visited_init()
 
-        for i in range(len(self.visited)):
-            visited.append([])
-            for j in range(len(self.visited[0])):
-                visited[i].append(False)
 
         queue.append([(1, 1)])
         while len(queue) != 0:
+            # print()
+            # for i in range(len(visited)):
+            #     print(visited[i])
+            # print()
             position = queue.popleft()
             visited[position[-1][0]][position[-1][1]] = True
             last_vertex = position[-1]
-            #self.maze[last_vertex[0]][last_vertex[1]] = 'B'
-            
-            if last_vertex == (self.rows*2 - 1, self.columns*2 - 1):
+            # self.maze[last_vertex[0]][last_vertex[1]] = 'B'
+
+            if last_vertex == (self.rows * 2 - 1, self.columns * 2 - 1):
                 self.bfs_correct_path(position)
                 return last_vertex
-            
+
             if (self.maze[last_vertex[0] + 1][last_vertex[1]] != '-'):
                 if self.bfs_legal([last_vertex[0] + 2, last_vertex[1]], visited):
                     new_path = position.copy()
@@ -499,10 +755,11 @@ class CreateMaze:
                     new_path = position.copy()
                     new_path.append((last_vertex[0], last_vertex[1] - 2))
                     queue.append(new_path)
+
     def bfs_correct_path(self, path):
         for points in path:
             self.maze[points[0]][points[1]] = 'B'
-    
+
     def legal(self, position):
         if (position[0] > 0 and position[0] < len(self.maze) and position[1] > 0 and position[1] < len(self.maze[0])):
             if not self.position_searched[position[0]][position[1]]:
@@ -510,18 +767,56 @@ class CreateMaze:
         return False
 
     def bfs_legal(self, position, visited):
+        # print(len(self.maze))
         if (position[0] > 0 and position[0] < len(self.maze) and position[1] > 0 and position[1] < len(self.maze[0])):
+            # print(position)
             if not visited[position[0]][position[1]]:
                 return True
         return False
 
-maze1 = CreateMaze(10, 12)
-maze1.creation()
-print('\n\n')
-maze1.maze_with_lines()
-maze1.solve_dfs([1, 1])
-maze1.maze_with_lines()
-maze1.solve_bfs()
-maze1.maze_with_lines()
+    def visited_init(self):
+        visited = []
+        for i in range(2 * self.rows + 1):
+            visited.append([])
+            for j in range(2 * self.columns + 1):
+                visited[i].append(False)
+        return visited
 
+# Debug Statements
+# maze1 = CreateMaze(13, 15)
+# maze1.build_walls()
+# maze1.print_maze()
+# maze1.prims_maze()
+# maze1.kruskalls_maze()
+# maze1.print_maze()
+# maze1.solve_dfs1()
+# maze1.print_maze()
+# maze1.solve_bfs()
+# maze1.print_maze()
 
+def main():
+    print("How big would you like the maze to be?")
+    rows = int(input("Number of Rows: "))
+    columns = int(input("Number of Columns: "))
+    print("How would you like this maze to be generated?")
+    print("Type 1 for prim's. Type 2 for Kruskall's. Type 3 for badgorithm. ")
+    generate = int(input("Your choice: "))
+    print("And how would you like to solve this maze? (Type 1 for BFS and 2 for DFS)")
+    solve = input("Your choice: ")
+    maze = CreateMaze(rows, columns)
+    maze.build_walls()
+    if (generate == 1):
+        maze.prims_maze()
+    elif generate == 2:
+        maze.kruskalls_maze()
+    else:
+        maze.creation()
+    maze.print_maze()
+
+    if solve == 1:
+        maze.solve_bfs()
+    else:
+        maze.solve_dfs1()
+    maze.print_maze()
+
+main()
